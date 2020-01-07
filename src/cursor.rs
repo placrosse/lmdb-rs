@@ -86,6 +86,39 @@ pub trait Cursor<'txn> {
         Iter::new(self.cursor(), ffi::MDB_GET_CURRENT, ffi::MDB_NEXT)
     }
 
+    /// Iterate over database items in reverse starting from the given key.
+    ///
+    /// For databases with duplicate data items (`DatabaseFlags::DUP_SORT`), the
+    /// duplicate data items of each key will be returned before moving on to
+    /// the next key.
+    fn iter_from_rev<K>(&mut self, key: K) -> Iter<'txn>
+    where
+        K: AsRef<[u8]>,
+    {
+        // get set_range
+        match self.get(Some(key.as_ref()), None, ffi::MDB_SET_RANGE) {
+            // if found and > key get prev
+            Ok(found) => {
+                if found.0.is_none() {
+                    match self.get(Some(key.as_ref()), None, ffi::MDB_PREV) {
+                        Ok(_) | Err(Error::NotFound) => (),
+                        Err(error) => return Iter::Err(error),
+                    }
+                } else {
+                    ()
+                }
+            },
+            // else get last
+            Err(Error::NotFound) => match self.get(Some(key.as_ref()), None, ffi::MDB_LAST) {
+                Ok(_) | Err(Error::NotFound) => (),
+                Err(error) => return Iter::Err(error),
+            },
+            Err(error) => return Iter::Err(error),
+        };
+
+        Iter::new(self.cursor(), ffi::MDB_GET_CURRENT, ffi::MDB_PREV)
+    }
+
     /// Iterate over duplicate database items. The iterator will begin with the
     /// item next after the cursor, and continue until the end of the database.
     /// Each item will be returned as an iterator of its duplicates.
