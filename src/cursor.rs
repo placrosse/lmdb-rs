@@ -99,7 +99,7 @@ pub trait Cursor<'txn> {
         match self.get(Some(key.as_ref()), None, ffi::MDB_SET_RANGE) {
             // if found and > key get prev
             Ok(found) => {
-                if found.0.is_some() {
+                if found.0.is_none() {
                     match self.get(Some(key.as_ref()), None, ffi::MDB_PREV) {
                         Ok(_) | Err(Error::NotFound) => (),
                         Err(error) => return Iter::Err(error),
