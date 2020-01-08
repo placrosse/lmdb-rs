@@ -95,28 +95,16 @@ pub trait Cursor<'txn> {
     where
         K: AsRef<[u8]>,
     {
-        // get set_range
-        match self.get(Some(key.as_ref()), None, ffi::MDB_SET_RANGE) {
-            // if found and > key get prev
-            Ok(found) => {
-                if found.0.is_none() {
-                    match self.get(Some(key.as_ref()), None, ffi::MDB_PREV) {
-                        Ok(_) | Err(Error::NotFound) => (),
-                        Err(error) => return Iter::Err(error),
-                    }
-                } else {
-                    ()
-                }
+        let op = match self.get(Some(key.as_ref()), None, ffi::MDB_SET_RANGE) {
+            Ok(found) => match found.0 {
+                Some(start) if *key.as_ref() != *start => ffi::MDB_PREV,
+                _ => ffi::MDB_GET_CURRENT,
             },
-            // else get last
-            Err(Error::NotFound) => match self.get(Some(key.as_ref()), None, ffi::MDB_LAST) {
-                Ok(_) | Err(Error::NotFound) => (),
-                Err(error) => return Iter::Err(error),
-            },
+            Err(Error::NotFound) => ffi::MDB_LAST,
             Err(error) => return Iter::Err(error),
         };
 
-        Iter::new(self.cursor(), ffi::MDB_GET_CURRENT, ffi::MDB_PREV)
+        Iter::new(self.cursor(), op, ffi::MDB_PREV)
     }
 
     /// Iterate over duplicate database items. The iterator will begin with the
